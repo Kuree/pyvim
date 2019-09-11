@@ -6,15 +6,14 @@ from multiprocessing import Process
 import logging
 import sys
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QAction, \
-    QTableWidget, QTableWidgetItem, QVBoxLayout
-from PyQt5.QtGui import QIcon
+from PyQt5.QtWidgets import QWidget, QTableWidget, QTableWidgetItem,\
+    QVBoxLayout, QLabel
 from PyQt5.QtCore import pyqtSignal, QObject, QThread
-import time
 
 
 class ValueWatcher(QWidget):
-    update_signal = pyqtSignal(int, int, str)
+    update_signal = pyqtSignal(list, int)
+    update_label = pyqtSignal(str)
 
     def __init__(self, editor):
         super().__init__()
@@ -22,17 +21,28 @@ class ValueWatcher(QWidget):
         self.setWindowTitle("Variable Watcher")
         self.setGeometry(0, 0, 300, 200)
         self.table = QTableWidget()
+        self.label = QLabel()
+        self.label.setText("Current Breakpoint:")
         self.layout = QVBoxLayout()
         self.layout.addWidget(self.table)
+        self.layout.addWidget(self.label)
         self.setLayout(self.layout)
 
         self.editor = editor
 
         self.update_signal.connect(self.handle_update)
+        self.update_label.connect(self.handle_text_update)
         self.show()
 
-    def handle_update(self, y, x, v):
-        self.table.setItem(y, x, QTableWidgetItem(v))
+    def handle_update(self, values, width):
+        self.table.setRowCount(len(values) / width)
+        self.table.setColumnCount(width)
+        for y, x, v in values:
+            self.table.setItem(y, x, QTableWidgetItem(v))
+        self.table.setHorizontalHeaderLabels(["Variable", "Value"])
+
+    def handle_text_update(self, value):
+        self.label.setText("Current Breakpoint: " + value)
 
 
 class Debugger:
@@ -60,8 +70,6 @@ class Debugger:
         self.top = "TOP"
 
         self.watcher = ValueWatcher(self)
-        self.watcher.table.setRowCount(3)
-        self.watcher.table.setColumnCount(2)
 
         # define route
         @self.app.route("/status/breakpoint", methods=["POST"])
@@ -126,11 +134,18 @@ class Debugger:
                 value = r.content
             table.append((front_var, value))
 
+        values = []
         for idx, (var, value) in enumerate(table):
-            # self.watcher.table.setItem(idx, 0, QTableWidgetItem(str(var)))
-            self.watcher.update_signal.emit(idx, 0, str(var))
-            self.watcher.update_signal.emit(idx, 1, str(value))
-        #self.watcher.move(0, 0)
+            values.append((idx, 0, str(var)))
+            values.append((idx, 1, str(value)))
+        self.watcher.update_signal.emit(values, 2)
+
+        # update breakpoint line
+        self.cursor.execute("SELECT * FROM breakpoint WHERE id=?", (stmt_id,))
+        value = self.cursor.fetchone()
+        _, filename, ln = value
+        filename = os.path.basename(filename)
+        self.watcher.update_label.emit(filename + ":" + str(ln))
 
     def continue_(self):
         try:
