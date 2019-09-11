@@ -46,6 +46,8 @@ class EditorBuffer(object):
         # Empty if not in file explorer mode, directory path otherwise.
         self.isdir = False
 
+        self.is_debug = False
+
         # Read text.
         if location:
             text = self._read(location)
@@ -161,8 +163,10 @@ class EditorBuffer(object):
         """
         Return name as displayed.
         """
-        if self.location is None:
+        if self.location is None and not self.is_debug:
             return '[New file]'
+        elif self.location is None and self.is_debug:
+            return '[Debug Window]'
         elif short:
             return os.path.basename(self.location)
         else:

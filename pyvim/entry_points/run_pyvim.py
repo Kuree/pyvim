@@ -13,6 +13,7 @@ Options:
 from __future__ import unicode_literals
 import docopt
 import os
+import sys
 
 from pyvim.editor import Editor
 from pyvim.rc_file import run_rc_file
@@ -25,13 +26,22 @@ __all__ = (
 def run():
     a = docopt.docopt(__doc__)
     locations = a['<location>']
-    in_tab_pages = a['-p']
+    in_tab_pages = True
     hsplit = a['-o']
     vsplit = a['-O']
     pyvimrc = a['-u']
 
+    # compute the db
+    if len(locations) != 1:
+        print("Please indicate a debug database file", file=sys.stderr)
+        exit(1)
+
+    database = locations[0]
+    if not os.path.isfile(database):
+        print(database, "does not exsit", file=sys.stderr)
+        exit(1)
     # Create new editor instance.
-    editor = Editor()
+    editor = Editor(database)
 
     # Apply rc file.
     if pyvimrc:
@@ -41,6 +51,9 @@ def run():
 
         if os.path.exists(default_pyvimrc):
             run_rc_file(editor, default_pyvimrc)
+
+    # get all the locations
+    locations = editor.debugger.get_all_files()
 
     # Load files and run.
     editor.load_initial_files(locations, in_tab_pages=in_tab_pages,

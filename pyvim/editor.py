@@ -26,6 +26,7 @@ from .layout import EditorLayout, get_terminal_title
 from .style import generate_built_in_styles, get_editor_style_by_name
 from .window_arrangement import WindowArrangement
 from .io import FileIO, DirectoryIO, HttpIO, GZipFileIO
+from .debugger import Debugger
 
 import pygments
 import os
@@ -43,7 +44,8 @@ class Editor(object):
     :param input: (Optionally) `prompt_toolkit.input.Input` object.
     :param output: (Optionally) `prompt_toolkit.output.Output` object.
     """
-    def __init__(self, config_directory='~/.pyvim', input=None, output=None):
+    def __init__(self, database, config_directory='~/.pyvim', input=None,
+                 output=None):
         self.input = input
         self.output = output
 
@@ -128,6 +130,9 @@ class Editor(object):
 
         # Command line previewer.
         self.previewer = CommandPreviewer(self)
+
+        # Debugger
+        self.debugger = Debugger(self, database=database)
 
     def load_initial_files(self, locations, in_tab_pages=False, hsplit=False, vsplit=False):
         """

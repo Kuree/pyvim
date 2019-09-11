@@ -21,6 +21,8 @@ setup(
         'pyflakes',        # For Python error reporting.
         'pygments',        # For the syntax highlighting.
         'docopt',          # For command line arguments.
+        'requests',        # For debugger interface
+        'flask',           # For debugger interface
     ],
     entry_points={
         'console_scripts': [

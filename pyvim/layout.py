@@ -157,94 +157,17 @@ def _bufferlist_overlay_visible(editor):
 
 class BufferListOverlay(ConditionalContainer):
     """
-    Floating window that shows the list of buffers when we are typing ':b'
-    inside the vim command line.
+    Floating window that shows the available break points
     """
     def __init__(self, editor):
-        def highlight_location(location, search_string, default_token):
-            """
-            Return a tokenlist with the `search_string` highlighted.
-            """
-            result = [(default_token, c) for c in location]
-
-            # Replace token of matching positions.
-            for m in re.finditer(re.escape(search_string), location):
-                for i in range(m.start(), m.end()):
-                    result[i] = ('class:searchmatch', result[i][1])
-
-            if location == search_string:
-                result[0] = (result[0][0] + ' [SetCursorPosition]', result[0][1])
-
-            return result
-
         def get_tokens():
-            wa = editor.window_arrangement
-            buffer_infos = wa.list_open_buffers()
+            debugger = editor.debugger
+            break_points = debugger.get_available_breakpoints()
 
-            # Filter infos according to typed text.
-            input_params = editor.command_buffer.text.lstrip().split(None, 1)
-            search_string = input_params[1] if len(input_params) > 1 else ''
-
-            if search_string:
-                def matches(info):
-                    """
-                    True when we should show this entry.
-                    """
-                    # When the input appears in the location.
-                    if input_params[1] in (info.editor_buffer.location or ''):
-                        return True
-
-                    # When the input matches this buffer his index number.
-                    if input_params[1] in str(info.index):
-                        return True
-
-                    # When this entry is part of the current completions list.
-                    b = editor.command_buffer
-
-                    if b.complete_state and any(info.editor_buffer.location in c.display
-                                                for c in b.complete_state.completions
-                                                if info.editor_buffer.location is not None):
-                        return True
-
-                    return False
-
-                buffer_infos = [info for info in buffer_infos if matches(info)]
-
-            # Render output.
-            if len(buffer_infos) == 0:
-                return [('', ' No match found. ')]
+            if not break_points:
+                return []
             else:
-                result = []
-
-                # Create title.
-                result.append(('', '  '))
-                result.append(('class:title', 'Open buffers\n'))
-
-                # Get length of longest location
-                max_location_len = max(len(info.editor_buffer.get_display_name()) for info in buffer_infos)
-
-                # Show info for each buffer.
-                for info in buffer_infos:
-                    eb = info.editor_buffer
-                    char = '%' if info.is_active else ' '
-                    char2 = 'a' if info.is_visible else ' '
-                    char3 = ' + ' if info.editor_buffer.has_unsaved_changes else '   '
-                    t = 'class:active' if info.is_active else ''
-
-                    result.extend([
-                        ('', ' '),
-                        (t, '%3i ' % info.index),
-                        (t, '%s' % char),
-                        (t, '%s ' % char2),
-                        (t, '%s ' % char3),
-                    ])
-                    result.extend(highlight_location(eb.get_display_name(), search_string, t))
-                    result.extend([
-                        (t, ' ' * (max_location_len - len(eb.get_display_name()))),
-                        (t + ' class:lineno', '  line %i' % (eb.buffer.document.cursor_position_row + 1)),
-                        (t, ' \n')
-                    ])
-                return result
+                return ["{0}".format(x) for x in break_points]
 
         super(BufferListOverlay, self).__init__(
             Window(FormattedTextControl(get_tokens),
@@ -267,6 +190,25 @@ class MessageToolbarBar(ConditionalContainer):
         super(MessageToolbarBar, self).__init__(
             FormattedTextToolbar(get_tokens),
             filter=Condition(lambda: editor.message is not None))
+
+
+class DebugWindow(ConditionalContainer):
+    def __init__(self, editor):
+        def get_tokens():
+            if not editor.debugger.debug_message():
+                return []
+            else:
+                if "Debug" not in editor.debugger.debug_message():
+                    print(editor.debugger.debug_message())
+                return [("", editor.debugger.debug_message())]
+
+        def condition():
+            return editor.window_arrangement.active_tab_index == 0
+
+        super(DebugWindow, self).__init__(
+            Window(FormattedTextControl(get_tokens),
+            align=WindowAlign.CENTER),
+            filter=Condition(condition))
 
 
 class ReportMessageToolbar(ConditionalContainer):
@@ -465,6 +407,9 @@ class EditorLayout(object):
                 Float(content=WelcomeMessageWindow(editor),
                       height=WELCOME_MESSAGE_HEIGHT,
                       width=WELCOME_MESSAGE_WIDTH),
+                # Float(content=DebugWindow(editor),
+                #       height=20,
+                #       width=40)
             ]
         )
 

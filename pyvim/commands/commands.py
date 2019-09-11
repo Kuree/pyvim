@@ -224,7 +224,6 @@ def buffer_list(editor):
     run_in_terminal(handler)
 
 
-@_cmd('b')
 @_cmd('buffer')
 def _buffer(editor, variables, force=False):
     """
@@ -239,6 +238,29 @@ def _buffer(editor, variables, force=False):
             editor.show_message(_NO_WRITE_SINCE_LAST_CHANGE_TEXT)
         else:
             editor.window_arrangement.go_to_buffer(buffer_name)
+
+
+@_cmd('b')
+def _break_point(editor, variables):
+    """
+    set breakpoint
+    """
+    line_num = variables.get("buffer_name")
+    if line_num:
+        # breakpoint the line number
+        filename = editor.current_editor_buffer.location
+        editor.debugger.set_break_point(filename, line_num)
+
+
+@cmd("run")
+def run_simulation(editor, force=False):
+    editor.debugger.continue_()
+
+
+@cmd('c')
+@cmd("continue")
+def _continue(editor, force=False):
+    editor.debugger.continue_()
 
 
 @cmd('bw', accepts_force=True)
@@ -292,8 +314,8 @@ def quit(editor, all_=False, force=False):
     # When there is more than one buffer open.
     elif not all_ and len(ebs) > 1:
         editor.show_message('%i more files to edit' % (len(ebs) - 1))
-
     else:
+        editor.debugger.stop()
         editor.application.exit()
 
 
@@ -306,31 +328,6 @@ def quit_all(editor, force=False):
     quit(editor, all_=True, force=force)
 
 
-@location_cmd('w', accepts_force=True)
-@location_cmd('write', accepts_force=True)
-def write(editor, location, force=False):
-    """
-    Write file.
-    """
-    if location and not force and os.path.exists(location):
-        editor.show_message('File exists (add ! to overriwe)')
-    else:
-        eb = editor.window_arrangement.active_editor_buffer
-        if location is None and eb.location is None:
-            editor.show_message(_NO_FILE_NAME)
-        else:
-            eb.write(location)
-
-
-@location_cmd('wq', accepts_force=True)
-def write_and_quit(editor, location, force=False):
-    """
-    Write file and quit.
-    """
-    write(editor, location, force=force)
-    editor.application.exit()
-
-
 @cmd('cq')
 def quit_nonzero(editor):
     """
@@ -340,19 +337,6 @@ def quit_nonzero(editor):
     # will ensure that the render output is reset, leaving the alternate
     # screen before quiting.
     editor.application.exit()
-
-
-@cmd('wqa')
-def write_and_quit_all(editor):
-    """
-    Write current buffer and quit all.
-    """
-    eb = editor.window_arrangement.active_editor_buffer
-    if eb.location is None:
-        editor.show_message(_NO_FILE_NAME)
-    else:
-        eb.write()
-        quit(editor, all_=True, force=False)
 
 
 @cmd('h')

@@ -442,6 +442,7 @@ class WindowArrangement(object):
 
         if show_in_current_window:
             self.show_editor_buffer(eb)
+        return eb
 
     def _auto_close_new_empty_buffers(self):
         """
@@ -505,11 +506,12 @@ class WindowArrangement(object):
                 # automatically.)
                 eb = self._get_or_create_editor_buffer()
 
-    def create_tab(self, location=None):
+    def create_tab(self, location=None, eb=None):
         """
         Create a new tab page.
         """
-        eb = self._get_or_create_editor_buffer(location)
+        if eb is None:
+            eb = self._get_or_create_editor_buffer(location)
 
         self.tab_pages.insert(self.active_tab_index + 1, TabPage(Window(eb)))
         self.active_tab_index += 1
