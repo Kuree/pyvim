@@ -9,6 +9,11 @@ Usage::
 """
 from __future__ import unicode_literals
 
+import contextlib
+import time
+import threading
+import signal
+
 from prompt_toolkit.application import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.enums import EditingMode
@@ -16,6 +21,8 @@ from prompt_toolkit.filters import Condition
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding.vi_state import InputMode
 from prompt_toolkit.styles import DynamicStyle
+from prompt_toolkit.utils import in_main_thread
+from prompt_toolkit.eventloop import get_event_loop
 
 from .commands.completer import create_command_completer
 from .commands.handler import handle_command
@@ -35,6 +42,29 @@ __all__ = (
     'Editor',
 )
 
+
+@contextlib.contextmanager
+def _auto_refresh_context(app, refresh_interval=None):
+    " Return a context manager for the auto-refresh loop. "
+    done = [False]  # nonlocal
+
+    # Enter.
+
+    def run():
+        while not done[0]:
+            time.sleep(refresh_interval)
+            app.invalidate()
+
+    if refresh_interval:
+        t = threading.Thread(target=run)
+        t.daemon = True
+        t.start()
+
+    try:
+        yield
+    finally:
+        # Exit.
+        done[0] = True
 
 class Editor(object):
     """
@@ -89,6 +119,8 @@ class Editor(object):
             GZipFileIO(),  # Should come before FileIO.
             FileIO(),
         ]
+
+        self.thread = None
 
         # Create history and search buffers.
         def handle_action(buff):
@@ -262,7 +294,22 @@ class Editor(object):
             self.application.vi_state.input_mode = InputMode.NAVIGATION
 
         # Run eventloop of prompt_toolkit.
-        self.application.run(pre_run=pre_run)
+        def run():
+            with _auto_refresh_context(self.application, .3):
+                try:
+                    self.application.run(pre_run=pre_run)
+                except BaseException as e:
+                    import traceback
+                    traceback.print_exc()
+                    print(e)
+        self.thread = threading.Thread(target=run)
+        self.thread.start()
+
+        has_sigwinch = hasattr(signal, 'SIGWINCH') and in_main_thread()
+        if has_sigwinch:
+            loop = get_event_loop()
+            loop.add_signal_handler(signal.SIGWINCH,
+                                    self.application.invalidate)
 
     def enter_command_mode(self):
         """

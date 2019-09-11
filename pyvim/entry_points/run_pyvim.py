@@ -17,6 +17,8 @@ import sys
 
 from pyvim.editor import Editor
 from pyvim.rc_file import run_rc_file
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QThread
 
 __all__ = (
     'run',
@@ -40,6 +42,9 @@ def run():
     if not os.path.isfile(database):
         print(database, "does not exsit", file=sys.stderr)
         exit(1)
+
+    # watcher
+    app = QApplication(sys.argv)
     # Create new editor instance.
     editor = Editor(database)
 
@@ -58,7 +63,19 @@ def run():
     # Load files and run.
     editor.load_initial_files(locations, in_tab_pages=in_tab_pages,
                               hsplit=hsplit, vsplit=vsplit)
-    editor.run()
+
+    class LoopThread(QThread):
+        def __init__(self):
+            QThread.__init__(self)
+
+        def __del__(self):
+            self.wait()
+
+        def run(self):
+            editor.run()
+    t = LoopThread()
+    t.start()
+    app.exec_()
 
 
 if __name__ == '__main__':

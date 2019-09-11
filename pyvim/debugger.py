@@ -4,12 +4,39 @@ import sqlite3
 from flask import Flask, request
 from multiprocessing import Process
 import logging
-from tabulate import tabulate
-import tempfile
-from pyvim.editor_buffer import EditorBuffer, Document
+import sys
+
+from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QAction, \
+    QTableWidget, QTableWidgetItem, QVBoxLayout
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import pyqtSignal, QObject, QThread
+import time
+
+
+class ValueWatcher(QWidget):
+    update_signal = pyqtSignal(int, int, str)
+
+    def __init__(self, editor):
+        super().__init__()
+
+        self.setWindowTitle("Variable Watcher")
+        self.setGeometry(0, 0, 300, 200)
+        self.table = QTableWidget()
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.table)
+        self.setLayout(self.layout)
+
+        self.editor = editor
+
+        self.update_signal.connect(self.handle_update)
+        self.show()
+
+    def handle_update(self, y, x, v):
+        self.table.setItem(y, x, QTableWidgetItem(v))
 
 
 class Debugger:
+
     def __init__(self, editor, hostname="localhost", port_num=8888,
                  database="debug.db"):
         self.host_name = hostname
@@ -32,6 +59,10 @@ class Debugger:
 
         self.top = "TOP"
 
+        self.watcher = ValueWatcher(self)
+        self.watcher.table.setRowCount(3)
+        self.watcher.table.setColumnCount(2)
+
         # define route
         @self.app.route("/status/breakpoint", methods=["POST"])
         def hit_breakpoint():
@@ -40,17 +71,23 @@ class Debugger:
             self.update(id_)
             return "Okay", 200
 
-        def run():
-            self.app.run(host="0.0.0.0", port=self.debugger_port)
+        class Worker(QThread):
+            app = self.app
+            debugger_port = self.debugger_port
 
-        self.server_process = Process(target=run)
+            def __init__(self):
+                QThread.__init__(self)
+
+            def run(self):
+                self.app.run(host="0.0.0.0", port=self.debugger_port)
+
+        self.server_process = Worker()
         self.server_process.start()
 
         self.connect()
 
     def stop(self):
         self.server_process.terminate()
-        self.server_process.join()
 
     def connect(self):
         try:
@@ -88,12 +125,12 @@ class Debugger:
             else:
                 value = r.content
             table.append((front_var, value))
-        s = tabulate(table, headers=["Python Variable Name", "Value"])
-        self.editor.show_message("test")
-        self.editor.application.invalidate()
-        self.editor.show_message(s)
 
-        self.editor.application._redraw()
+        for idx, (var, value) in enumerate(table):
+            # self.watcher.table.setItem(idx, 0, QTableWidgetItem(str(var)))
+            self.watcher.update_signal.emit(idx, 0, str(var))
+            self.watcher.update_signal.emit(idx, 1, str(value))
+        #self.watcher.move(0, 0)
 
     def continue_(self):
         try:
